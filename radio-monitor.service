@@ -1,0 +1,14 @@
+[Unit]
+Description=Radio to Spotify Monitor (all stations)
+After=network-online.target
+
+[Service]
+Type=simple
+User=arnonsegal
+WorkingDirectory=/home/arnonsegal/scripts/spotify/multi-radio
+ExecStart=/home/arnonsegal/scripts/spotify/multi-radio/.venv/bin/python -W ignore::SyntaxWarning -m radio_monitor.main
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

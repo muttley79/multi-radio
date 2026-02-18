@@ -1,0 +1,10 @@
+.venv/
+stations.yaml
+.spotify_token_cache
+*.pid
+*.log
+*.log.*
+__pycache__/
+*.pyc
+*.pyo
+*.log

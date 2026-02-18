@@ -1,0 +1,21 @@
+shared:
+  spotify_client_id: "your_client_id"
+  spotify_client_secret: "your_client_secret"
+  spotify_redirect_uri: "http://127.0.0.1:8888/callback"
+  sample_duration: 25       # seconds of audio to sample per cycle
+  poll_interval: 300        # seconds between cycles
+  playlist_max_size: 100    # oldest tracks trimmed when exceeded
+  playlist_mode: "normal"   # "normal" = newest on top, "reverse" = newest at bottom
+  log_max_bytes: 5242880    # 5 MB per log file
+  log_backup_count: 3
+
+stations:
+  - name: "station1"
+    stream_url: "https://example.com/stream.m4a"
+    spotify_playlist_id: "your_playlist_id"
+    skip_hours: "07:00-09:30"   # comma-separated ranges, e.g. "06:00-09:00,16:00-21:00"
+
+  - name: "station2"
+    stream_url: "https://example.com/stream2.m4a"
+    spotify_playlist_id: "your_other_playlist_id"
+    skip_hours: "06:00-09:00,16:00-21:00"
