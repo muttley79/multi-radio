@@ -22,12 +22,19 @@ stations:
     stream_url: "https://example.com/stream.m4a"
     spotify_playlist_id: "your_spotify_playlist_id"
     youtube_playlist_id: "PLxxxxxxxxxxxxxxxxxxxx"
-    skip_hours: "07:00-09:30"   # comma-separated ranges, e.g. "06:00-09:00,16:00-21:00"
+    # skip_hours supports an optional day prefix before each time range:
+    #   No prefix           → every day          "07:00-09:30"
+    #   weekdays / weekends → Sun-Thu / Fri-Sat   "weekdays 07:00-09:30"
+    #   Single day          →                     "fri 23:00-01:00"
+    #   Day range           →                     "mon-fri 07:00-09:30"
+    #   Wrapping day range  →                     "fri-mon 22:00-08:00"
+    #   Multiple entries    →                     "mon-fri 07:00-09:30, sat 10:00-14:00"
+    skip_hours: "mon-fri 07:00-09:30, sat 10:00-14:00"
 
   - name: "station2"          # Spotify only (existing behaviour)
     stream_url: "https://example.com/stream2.m4a"
     spotify_playlist_id: "your_other_spotify_playlist_id"
-    skip_hours: "06:00-09:00,16:00-21:00"
+    skip_hours: "06:00-09:00,16:00-21:00"   # no prefix = every day (backward-compatible)
 
   - name: "station3"          # YouTube only
     stream_url: "https://example.com/stream3.m4a"

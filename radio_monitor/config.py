@@ -11,6 +11,7 @@ class SkipRange:
     start_minute: int
     end_hour: int
     end_minute: int
+    days: frozenset | None = None  # None = every day; 0=Mon … 6=Sun
 
 
 @dataclass
@@ -52,8 +53,37 @@ class AppConfig:
     stations: list[StationConfig]
 
 
+_DAY_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
+def _parse_days(spec: str) -> frozenset:
+    spec = spec.lower()
+    if spec == "weekdays":
+        return frozenset([6, 0, 1, 2, 3])  # Sun-Thu
+    if spec == "weekends":
+        return frozenset([4, 5])  # Fri-Sat
+    if "-" in spec:
+        a, b = spec.split("-", 1)
+        start, end = _DAY_MAP[a], _DAY_MAP[b]
+        if start <= end:
+            return frozenset(range(start, end + 1))
+        else:  # wraps: fri-mon → {4,5,6,0}
+            return frozenset(list(range(start, 7)) + list(range(0, end + 1)))
+    return frozenset([_DAY_MAP[spec]])
+
+
 def _parse_skip_hours(raw: str) -> list[SkipRange]:
-    """Parse comma-separated time ranges like '02:00-06:00,23:00-01:00'."""
+    """Parse comma-separated time ranges, with optional day prefix.
+
+    Formats:
+      "07:00-09:30"                   every day (unchanged)
+      "weekdays 07:00-09:30"          weekdays only (Sun-Thu)
+      "weekends 10:00-12:00"          weekends only (Fri-Sat)
+      "mon-fri 07:00-09:30"           day range
+      "fri-mon 22:00-08:00"           wrapping day range
+      "sat 10:00-14:00"               single day
+      "mon-fri 07:00-09:30, sat 10:00-14:00"  multiple entries
+    """
     if not raw or not raw.strip():
         return []
     ranges = []
@@ -61,10 +91,15 @@ def _parse_skip_hours(raw: str) -> list[SkipRange]:
         part = part.strip()
         if not part:
             continue
-        start_str, end_str = part.split("-")
+        if part[0].isalpha():
+            day_spec, time_part = part.split(" ", 1)
+            days = _parse_days(day_spec)
+        else:
+            day_spec, time_part, days = None, part, None
+        start_str, end_str = time_part.strip().split("-")
         sh, sm = (int(x) for x in start_str.strip().split(":"))
         eh, em = (int(x) for x in end_str.strip().split(":"))
-        ranges.append(SkipRange(sh, sm, eh, em))
+        ranges.append(SkipRange(sh, sm, eh, em, days))
     return ranges
 
 
