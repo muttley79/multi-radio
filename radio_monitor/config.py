@@ -18,6 +18,8 @@ class SharedConfig:
     spotify_client_id: str
     spotify_client_secret: str
     spotify_redirect_uri: str
+    youtube_client_id: str
+    youtube_client_secret: str
     sample_duration: int
     poll_interval: int
     playlist_max_size: int
@@ -30,11 +32,16 @@ class SharedConfig:
 class StationConfig:
     name: str
     stream_url: str
-    spotify_playlist_id: str
+    spotify_playlist_id: str | None = None
+    youtube_playlist_id: str | None = None
     skip_ranges: list[SkipRange] = field(default_factory=list)
     log_file: str = ""
 
     def __post_init__(self):
+        if not self.spotify_playlist_id and not self.youtube_playlist_id:
+            raise ValueError(
+                f"Station '{self.name}' must have at least one of spotify_playlist_id or youtube_playlist_id"
+            )
         if not self.log_file:
             self.log_file = f"{self.name}.log"
 
@@ -79,9 +86,11 @@ def load_config(yaml_path: str = "stations.yaml") -> AppConfig:
         sys.exit(1)
 
     shared = SharedConfig(
-        spotify_client_id=raw_shared["spotify_client_id"],
-        spotify_client_secret=raw_shared["spotify_client_secret"],
-        spotify_redirect_uri=raw_shared["spotify_redirect_uri"],
+        spotify_client_id=raw_shared.get("spotify_client_id", ""),
+        spotify_client_secret=raw_shared.get("spotify_client_secret", ""),
+        spotify_redirect_uri=raw_shared.get("spotify_redirect_uri", ""),
+        youtube_client_id=raw_shared.get("youtube_client_id", ""),
+        youtube_client_secret=raw_shared.get("youtube_client_secret", ""),
         sample_duration=int(raw_shared.get("sample_duration", 12)),
         poll_interval=int(raw_shared.get("poll_interval", 300)),
         playlist_max_size=int(raw_shared.get("playlist_max_size", 100)),
@@ -92,13 +101,18 @@ def load_config(yaml_path: str = "stations.yaml") -> AppConfig:
 
     stations = []
     for raw_station in data.get("stations", []):
-        station = StationConfig(
-            name=raw_station["name"],
-            stream_url=raw_station["stream_url"],
-            spotify_playlist_id=raw_station["spotify_playlist_id"],
-            skip_ranges=_parse_skip_hours(raw_station.get("skip_hours", "")),
-            log_file=raw_station.get("log_file", ""),
-        )
+        try:
+            station = StationConfig(
+                name=raw_station["name"],
+                stream_url=raw_station["stream_url"],
+                spotify_playlist_id=raw_station.get("spotify_playlist_id"),
+                youtube_playlist_id=raw_station.get("youtube_playlist_id"),
+                skip_ranges=_parse_skip_hours(raw_station.get("skip_hours", "")),
+                log_file=raw_station.get("log_file", ""),
+            )
+        except ValueError as exc:
+            print(f"FATAL: {exc}", file=sys.stderr)
+            sys.exit(1)
         stations.append(station)
 
     if not stations:

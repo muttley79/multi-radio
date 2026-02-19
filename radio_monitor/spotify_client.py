@@ -35,8 +35,8 @@ class SpotifyPlaylistManager:
         me = self.sp.current_user()
         logger.info("Authenticated as Spotify user: %s", me.get("display_name") or me["id"])
 
-    def get_playlist_track_uris(self) -> list[str]:
-        """Fetch all track URIs currently in the playlist."""
+    def _get_playlist_track_uris(self) -> list[str]:
+        """Fetch all track URIs currently in the playlist (needed for trim calculations)."""
         uris = []
         results = self.sp.playlist_items(
             self.playlist_id, fields="items.track.uri,next", additional_types=["track"]
@@ -90,34 +90,37 @@ class SpotifyPlaylistManager:
             return track.get("uri")
         return None
 
-    def add_song(self, track_uri: str) -> bool:
+    def add_song(self, track_uri: str) -> None:
         """Add a track to the playlist, respecting mode and max size.
 
-        Returns True if added, False if duplicate.
+        No dedup — the caller is responsible for the same-song check via get_last_track_uri().
+        Trim removes by exact position so duplicate URIs in the playlist are handled correctly.
         """
-        current_uris = self.get_playlist_track_uris()
-
-        if track_uri in current_uris:
-            logger.info("Already in playlist: %s", track_uri)
-            return False
+        current_uris = self._get_playlist_track_uris()
 
         if self.mode == "normal":
-            # Newest on top
+            # Newest on top: add at position 0, trim the last item(s) if over max
             self.sp.playlist_add_items(self.playlist_id, [track_uri], position=0)
             logger.info("Added to top of playlist: %s", track_uri)
-            # Trim from bottom if over max
             if len(current_uris) + 1 > self.max_size:
-                excess = current_uris[self.max_size - 1 :]
-                self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, excess)
-                logger.info("Trimmed %d old track(s) from bottom", len(excess))
+                excess_count = len(current_uris) + 1 - self.max_size
+                # After the insert at 0, old items shifted by 1: old index i → new position i+1
+                items_to_remove = [
+                    {"uri": current_uris[self.max_size - 1 + i], "positions": [self.max_size + i]}
+                    for i in range(excess_count)
+                ]
+                self.sp.playlist_remove_specific_occurrences_of_items(self.playlist_id, items_to_remove)
+                logger.info("Trimmed %d old track(s) from bottom", excess_count)
         else:
-            # Reverse: newest at bottom
+            # Reverse: newest at bottom, trim the first item(s) if over max
             self.sp.playlist_add_items(self.playlist_id, [track_uri])
             logger.info("Added to bottom of playlist: %s", track_uri)
-            # Trim from top if over max
             if len(current_uris) + 1 > self.max_size:
-                excess = current_uris[: len(current_uris) + 1 - self.max_size]
-                self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, excess)
-                logger.info("Trimmed %d old track(s) from top", len(excess))
-
-        return True
+                excess_count = len(current_uris) + 1 - self.max_size
+                # Items at the top were not shifted (add was at end)
+                items_to_remove = [
+                    {"uri": current_uris[i], "positions": [i]}
+                    for i in range(excess_count)
+                ]
+                self.sp.playlist_remove_specific_occurrences_of_items(self.playlist_id, items_to_remove)
+                logger.info("Trimmed %d old track(s) from top", excess_count)

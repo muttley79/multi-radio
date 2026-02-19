@@ -1,7 +1,15 @@
 shared:
+  # Spotify credentials — only required if any station uses spotify_playlist_id.
+  # Create an app at https://developer.spotify.com/dashboard and set the redirect URI there.
   spotify_client_id: "your_client_id"
   spotify_client_secret: "your_client_secret"
   spotify_redirect_uri: "http://127.0.0.1:8888/callback"
+
+  # YouTube credentials — only required if any station uses youtube_playlist_id.
+  # Create an OAuth 2.0 Desktop app at https://console.cloud.google.com and copy the values below.
+  # youtube_client_id: "your_youtube_client_id"
+  # youtube_client_secret: "your_youtube_client_secret"
+
   sample_duration: 25       # seconds of audio to sample per cycle
   poll_interval: 300        # seconds between cycles
   playlist_max_size: 100    # oldest tracks trimmed when exceeded
@@ -10,12 +18,17 @@ shared:
   log_backup_count: 3
 
 stations:
-  - name: "station1"
+  - name: "station1"          # both Spotify and YouTube
     stream_url: "https://example.com/stream.m4a"
-    spotify_playlist_id: "your_playlist_id"
+    spotify_playlist_id: "your_spotify_playlist_id"
+    youtube_playlist_id: "PLxxxxxxxxxxxxxxxxxxxx"
     skip_hours: "07:00-09:30"   # comma-separated ranges, e.g. "06:00-09:00,16:00-21:00"
 
-  - name: "station2"
+  - name: "station2"          # Spotify only (existing behaviour)
     stream_url: "https://example.com/stream2.m4a"
-    spotify_playlist_id: "your_other_playlist_id"
+    spotify_playlist_id: "your_other_spotify_playlist_id"
     skip_hours: "06:00-09:00,16:00-21:00"
+
+  - name: "station3"          # YouTube only
+    stream_url: "https://example.com/stream3.m4a"
+    youtube_playlist_id: "PLyyyyyyyyyyyyyyyyyyyy"
