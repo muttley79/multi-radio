@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 import tempfile
 
@@ -32,10 +33,10 @@ def record_sample(stream_url: str, duration: int) -> str | None:
         return tmp.name
     except subprocess.TimeoutExpired:
         logger.error("ffmpeg timed out after %ds", timeout)
-        return None
     except subprocess.CalledProcessError as e:
         logger.error("ffmpeg failed: %s", e.stderr.decode(errors="replace").strip())
-        return None
     except FileNotFoundError:
         logger.error("ffmpeg not found — install it with: apt install ffmpeg")
-        return None
+
+    os.unlink(tmp.name)
+    return None
