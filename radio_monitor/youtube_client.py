@@ -3,6 +3,8 @@ import logging
 import os
 import urllib.parse
 
+from yt_dlp import YoutubeDL
+
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -74,26 +76,30 @@ class YouTubePlaylistManager:
 
     def verify_auth(self) -> None:
         """Force an API call to trigger OAuth login if needed. Call at startup."""
-        resp = self._yt.channels().list(part="snippet", mine=True).execute()
-        items = resp.get("items", [])
-        name = items[0]["snippet"]["title"] if items else "(unknown)"
-        logger.info("Authenticated as YouTube user: %s", name)
+        from googleapiclient.errors import HttpError
+        try:
+            resp = self._yt.channels().list(part="snippet", mine=True).execute()
+            items = resp.get("items", [])
+            name = items[0]["snippet"]["title"] if items else "(unknown)"
+            logger.info("Authenticated as YouTube user: %s", name)
+        except HttpError as e:
+            if e.resp.status == 403:
+                logger.warning("YouTube quota exceeded during auth check — credentials are loaded, continuing anyway")
+            else:
+                raise
 
     def search_track(self, artist: str, title: str) -> str | None:
         """Search YouTube for an official music video. Returns videoId or None."""
         query = f"{artist} {title} official music video"
-        resp = (
-            self._yt.search()
-            .list(part="id", q=query, type="video", maxResults=1)
-            .execute()
-        )
-        items = resp.get("items", [])
-        if not items:
-            logger.warning("YouTube search found nothing for: %s - %s", artist, title)
-            return None
-        video_id = items[0]["id"]["videoId"]
-        logger.info("YouTube match: %s - %s → %s", artist, title, video_id)
-        return video_id
+        with YoutubeDL({"quiet": True, "no_warnings": True, "extract_flat": True}) as ydl:
+            info = ydl.extract_info(f"ytsearch1:{query}", download=False)
+            entries = info.get("entries", [])
+            if not entries:
+                logger.warning("YouTube search found nothing for: %s - %s", artist, title)
+                return None
+            video_id = entries[0]["id"]
+            logger.info("YouTube match: %s - %s → %s", artist, title, video_id)
+            return video_id
 
     def _get_playlist_items(self) -> list[dict]:
         """Fetch all playlist items as raw API dicts (id + snippet)."""

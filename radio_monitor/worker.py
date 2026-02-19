@@ -94,45 +94,39 @@ def run_station(station: StationConfig, shared: SharedConfig) -> None:
                 both = "Spotify" in client_map and "YouTube" in client_map
 
                 if both:
-                    # Spotify-led mode: YouTube is only searched when Spotify confirms a new song,
-                    # saving 100 quota units per cycle when the song is already in the playlist.
                     spotify = client_map["Spotify"]
                     youtube = client_map["YouTube"]
 
+                    # --- Spotify ---
                     spotify_uri = spotify.search_track(artist, title)
                     if not spotify_uri:
                         logger.warning("Song not found on Spotify: %s - %s", artist, title)
-                        time.sleep(shared.poll_interval)
-                        continue
-
-                    if spotify_uri == spotify.get_last_track_uri():
+                    elif spotify_uri == spotify.get_last_track_uri():
                         logger.info("Same song still playing: %s - %s, retrying in 120s", artist, title)
                         time.sleep(120)
                         continue
-
-                    spotify_ok = False
-                    try:
-                        spotify.add_song(spotify_uri)
-                        logger.info("Added to Spotify playlist: %s - %s", artist, title)
-                        spotify_ok = True
-                    except Exception:
-                        logger.exception("Error adding to Spotify for: %s - %s", artist, title)
-
-                    if spotify_ok:
+                    else:
                         try:
-                            youtube_id = youtube.search_track(artist, title)
-                            if not youtube_id:
-                                logger.warning("Song not found on YouTube: %s - %s", artist, title)
-                            else:
-                                youtube.add_song(youtube_id)
-                                logger.info("Added to YouTube playlist: %s - %s", artist, title)
-                        except HttpError as e:
-                            if e.resp.status == 403:
-                                logger.warning("YouTube quota exceeded, skipping: %s - %s", artist, title)
-                            else:
-                                logger.exception("YouTube error for: %s - %s", artist, title)
+                            spotify.add_song(spotify_uri)
+                            logger.info("Added to Spotify playlist: %s - %s", artist, title)
                         except Exception:
-                            logger.exception("Error adding to YouTube for: %s - %s", artist, title)
+                            logger.exception("Error adding to Spotify for: %s - %s", artist, title)
+
+                    # --- YouTube (always attempted; yt-dlp has no quota cost) ---
+                    try:
+                        youtube_id = youtube.search_track(artist, title)
+                        if not youtube_id:
+                            logger.warning("Song not found on YouTube: %s - %s", artist, title)
+                        elif youtube_id != youtube.get_last_track_uri():
+                            youtube.add_song(youtube_id)
+                            logger.info("Added to YouTube playlist: %s - %s", artist, title)
+                    except HttpError as e:
+                        if e.resp.status == 403:
+                            logger.warning("YouTube quota exceeded, skipping: %s - %s", artist, title)
+                        else:
+                            logger.exception("YouTube error for: %s - %s", artist, title)
+                    except Exception:
+                        logger.exception("Error adding to YouTube for: %s - %s", artist, title)
 
                 else:
                     # Single-platform flow
