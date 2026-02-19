@@ -7,6 +7,8 @@ from radio_monitor.config import SharedConfig, StationConfig
 from radio_monitor.identifier import identify_song
 from radio_monitor.recorder import record_sample
 from radio_monitor.scheduler import is_skip_hour
+from googleapiclient.errors import HttpError
+
 from radio_monitor.spotify_client import SpotifyPlaylistManager
 from radio_monitor.youtube_client import YouTubePlaylistManager
 
@@ -117,15 +119,20 @@ def run_station(station: StationConfig, shared: SharedConfig) -> None:
                         logger.exception("Error adding to Spotify for: %s - %s", artist, title)
 
                     if spotify_ok:
-                        youtube_id = youtube.search_track(artist, title)
-                        if not youtube_id:
-                            logger.warning("Song not found on YouTube: %s - %s", artist, title)
-                        else:
-                            try:
+                        try:
+                            youtube_id = youtube.search_track(artist, title)
+                            if not youtube_id:
+                                logger.warning("Song not found on YouTube: %s - %s", artist, title)
+                            else:
                                 youtube.add_song(youtube_id)
                                 logger.info("Added to YouTube playlist: %s - %s", artist, title)
-                            except Exception:
-                                logger.exception("Error adding to YouTube for: %s - %s", artist, title)
+                        except HttpError as e:
+                            if e.resp.status == 403:
+                                logger.warning("YouTube quota exceeded, skipping: %s - %s", artist, title)
+                            else:
+                                logger.exception("YouTube error for: %s - %s", artist, title)
+                        except Exception:
+                            logger.exception("Error adding to YouTube for: %s - %s", artist, title)
 
                 else:
                     # Single-platform flow
