@@ -121,11 +121,23 @@ class YouTubePlaylistManager:
         return items
 
     def get_last_track_uri(self) -> str | None:
-        """Return the videoId at position 0 (most recently added in normal mode)."""
-        items = self._get_playlist_items()
-        if not items:
-            return None
-        return items[0]["snippet"]["resourceId"]["videoId"]
+        """Return the videoId of the most recently added item."""
+        if self.mode == "normal":
+            resp = self._yt.playlistItems().list(
+                part="snippet",
+                playlistId=self.playlist_id,
+                maxResults=1,
+            ).execute()
+            items = resp.get("items", [])
+            if not items:
+                return None
+            return items[0]["snippet"]["resourceId"]["videoId"]
+        else:
+            # reverse: newest at bottom — paginate to last page
+            items = self._get_playlist_items()
+            if not items:
+                return None
+            return items[-1]["snippet"]["resourceId"]["videoId"]
 
     def add_song(self, video_id: str) -> None:
         """Add a video to the playlist, respecting mode and max size.

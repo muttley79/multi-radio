@@ -55,23 +55,43 @@ class SpotifyPlaylistManager:
     def search_track(self, artist: str, title: str) -> str | None:
         """Search Spotify for a track by artist and title. Returns URI or None.
 
-        Tries multiple queries in order of strictness, always keeping artist strict.
+        Tries multiple queries in order of strictness, with targeted fallbacks for
+        Hebrew titles, multi-artist entries, and transliteration mismatches.
         """
         import re
-        clean_title = re.sub(r"\s*\(.*?\)\s*$", "", title).strip()
+
+        # Extract Hebrew text from parentheses, e.g. "Title (הכותרת)" → "הכותרת"
+        hebrew_match = re.search(r'\(([^\)]*[\u0590-\u05FF][^\)]*)\)', title)
+        hebrew_title = hebrew_match.group(1).strip() if hebrew_match else None
+
+        # First artist for multi-artist fallback, e.g. "Artist1, Artist2 & Artist3" → "Artist1"
+        first_artist = re.split(r'[,&]', artist)[0].strip()
+
+        # Stripped title (last-resort only): remove trailing (parens) or [brackets]
+        clean_title = re.sub(r"\s*[\(\[].*?[\)\]]\s*$", "", title).strip()
 
         queries = [
-            f"artist:{artist} track:{clean_title}",
-            f"artist:{artist} track:{title}",
-            f"artist:{artist} {clean_title}",
+            f"artist:{artist} track:{title}",              # 1. exact — full title with Live/Extended
         ]
+        if hebrew_title:
+            queries += [
+                f"artist:{artist} track:{hebrew_title}",   # 2. Hebrew title, strict artist
+                f"{artist} {hebrew_title}",                 # 3. Hebrew title, free-text
+            ]
+        queries.append(f"{artist} {title}")                # 4. free-text, full title (handles Hebrew artist names)
+        if first_artist != artist:
+            queries.append(f"{first_artist} {title}")      # 5. first artist only, full title
+            if hebrew_title:
+                queries.append(f"{first_artist} {hebrew_title}")  # 6. first artist + Hebrew
+        if clean_title != title:
+            queries.append(f"artist:{artist} track:{clean_title}")  # 7. last resort: stripped title
 
-        for query in queries:
+        for i, query in enumerate(queries):
             results = self.sp.search(q=query, type="track", limit=1)
             items = results["tracks"]["items"]
             if items:
                 uri = items[0]["uri"]
-                logger.info("Spotify match: %s - %s → %s", artist, title, uri)
+                logger.info("Spotify match [query=%d]: %s - %s → %s", i + 1, artist, title, uri)
                 return uri
 
         logger.warning("Spotify search found nothing for: %s - %s", artist, title)
