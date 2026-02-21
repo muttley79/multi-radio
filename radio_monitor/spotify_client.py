@@ -60,9 +60,20 @@ class SpotifyPlaylistManager:
         """
         import re
 
-        # Extract Hebrew text from parentheses, e.g. "Title (הכותרת)" → "הכותרת"
-        hebrew_match = re.search(r'\(([^\)]*[\u0590-\u05FF][^\)]*)\)', title)
+        HEBREW = r'[\u0590-\u05FF]'
+        HEBREW_IN_PARENS = r'\(([^\)]*[\u0590-\u05FF][^\)]*)\)'
+
+        # Hebrew text in title parens: "Title (הכותרת)" → "הכותרת"
+        hebrew_match = re.search(HEBREW_IN_PARENS, title)
         hebrew_title = hebrew_match.group(1).strip() if hebrew_match else None
+
+        # If title itself IS Hebrew (no parens), use it directly
+        if not hebrew_title and re.search(HEBREW, title):
+            hebrew_title = title
+
+        # Hebrew text in artist parens: "Tzlil Mecuvan (צליל מכוון)" → "צליל מכוון"
+        hebrew_artist_match = re.search(HEBREW_IN_PARENS, artist)
+        hebrew_artist = hebrew_artist_match.group(1).strip() if hebrew_artist_match else None
 
         # First artist for multi-artist fallback, e.g. "Artist1, Artist2 & Artist3" → "Artist1"
         first_artist = re.split(r'[,&]', artist)[0].strip()
@@ -78,16 +89,23 @@ class SpotifyPlaylistManager:
                 f"artist:{artist} track:{hebrew_title}",   # 2. Hebrew title, strict artist
                 f"{artist} {hebrew_title}",                 # 3. Hebrew title, free-text
             ]
-        queries.append(f"{artist} {title}")                # 4. free-text, full title (handles Hebrew artist names)
-        if first_artist != artist:
-            queries.append(f"{first_artist} {title}")      # 5. first artist only, full title
+        if hebrew_artist:
+            queries.append(f"{hebrew_artist} {title}")     # 4. Hebrew artist, transliterated title
             if hebrew_title:
-                queries.append(f"{first_artist} {hebrew_title}")  # 6. first artist + Hebrew
+                queries.append(f"{hebrew_artist} {hebrew_title}")  # 5. both Hebrew
+        queries.append(f"{artist} {title}")                # 6. free-text, full title (handles Hebrew artist names)
+        queries.append(f"{artist} - {title}")              # 7. dash format (matches Spotify UI search style)
+        if first_artist != artist:
+            queries.append(f"{first_artist} {title}")      # 8. first artist only, full title
+            if hebrew_title:
+                queries.append(f"{first_artist} {hebrew_title}")  # 9. first artist + Hebrew
         if clean_title != title:
-            queries.append(f"artist:{artist} track:{clean_title}")  # 7. last resort: stripped title
+            queries.append(f"artist:{artist} track:{clean_title}")  # 10. stripped title
+        if hebrew_title:
+            queries.append(f"track:{hebrew_title}")        # 11. last resort: Hebrew title only (no artist)
 
         for i, query in enumerate(queries):
-            results = self.sp.search(q=query, type="track", limit=1)
+            results = self.sp.search(q=query, type="track", limit=1, market="IL")
             items = results["tracks"]["items"]
             if items:
                 uri = items[0]["uri"]
