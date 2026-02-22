@@ -4,9 +4,9 @@ After=network-online.target
 
 [Service]
 Type=simple
-User=arnonsegal
-WorkingDirectory=/home/arnonsegal/scripts/spotify/multi-radio
-ExecStart=/home/arnonsegal/scripts/spotify/multi-radio/.venv/bin/python -W ignore::SyntaxWarning -m radio_monitor.main
+User=pi
+WorkingDirectory=/home/pi/scripts/multi-radio
+ExecStart=/home/pi/scripts/multi-radio/.venv/bin/python -W ignore::SyntaxWarning -m radio_monitor.main
 Restart=always
 RestartSec=30
 
