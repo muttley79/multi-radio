@@ -61,6 +61,7 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
     logger.info("Starting station %s — stream: %s, interval: %ds", station.name, station.stream_url, shared.poll_interval)
 
     clients = _build_clients(station, shared)
+    _last_song: tuple[str, str] | None = None  # dedup for analytics-only stations
 
     in_skip = False
     while True:
@@ -90,6 +91,21 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
                     continue
 
                 artist, title = song["artist"], song["title"]
+
+                if not clients:
+                    # Analytics-only station: no playlist targets
+                    if (artist, title) == _last_song:
+                        logger.info("Same song still playing: %s - %s, retrying in 120s", artist, title)
+                        time.sleep(120)
+                        continue
+                    _last_song = (artist, title)
+                    if db and station.analytics_enabled:
+                        db.record_play(station.name, artist, title,
+                                       retention_days=station.analytics_retention_days)
+                        logger.info("Recorded play (analytics-only): %s - %s", artist, title)
+                    time.sleep(shared.poll_interval)
+                    continue
+
                 client_map = dict(clients)
                 both = "Spotify" in client_map and "YouTube" in client_map
 

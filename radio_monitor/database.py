@@ -81,7 +81,9 @@ class RadioDatabase:
         try:
             rows = conn.execute(
                 f"SELECT artist, title, COUNT(*) as count, MAX(spotify_uri) as spotify_uri "
-                f"FROM plays {where} GROUP BY artist, title ORDER BY count DESC LIMIT ?",
+                f"FROM plays {where} GROUP BY artist, title ORDER BY "
+                f"CASE WHEN COUNT(*) > 1 THEN 0 ELSE 1 END, "
+                f"COUNT(*) DESC, MAX(played_at) DESC LIMIT ?",
                 params + [limit],
             ).fetchall()
             return [dict(r) for r in rows]
@@ -94,7 +96,9 @@ class RadioDatabase:
         try:
             rows = conn.execute(
                 f"SELECT artist, COUNT(*) as count FROM plays {where} "
-                f"GROUP BY artist ORDER BY count DESC LIMIT ?",
+                f"GROUP BY artist ORDER BY "
+                f"CASE WHEN COUNT(*) > 1 THEN 0 ELSE 1 END, "
+                f"COUNT(*) DESC, MAX(played_at) DESC LIMIT ?",
                 params + [limit],
             ).fetchall()
             return [dict(r) for r in rows]

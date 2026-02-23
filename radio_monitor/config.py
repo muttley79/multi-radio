@@ -46,9 +46,15 @@ class StationConfig:
     analytics_retention_days: int = 30
 
     def __post_init__(self):
-        if not self.spotify_playlist_id and not self.youtube_playlist_id:
+        if not self.name:
+            raise ValueError("Station name must not be empty")
+        if not self.stream_url:
+            raise ValueError(f"Station '{self.name}' has no stream_url")
+        if self.analytics_enabled and self.analytics_retention_days <= 0:
+            raise ValueError(f"Station '{self.name}': analytics_retention_days must be > 0")
+        if not self.spotify_playlist_id and not self.youtube_playlist_id and not self.analytics_enabled:
             raise ValueError(
-                f"Station '{self.name}' must have at least one of spotify_playlist_id or youtube_playlist_id"
+                f"Station '{self.name}' has no playlist and analytics is disabled — nothing to do"
             )
         if not self.log_file:
             self.log_file = f"{self.name}.log"
@@ -162,6 +168,35 @@ def load_config(yaml_path: str = "stations.yaml") -> AppConfig:
             print(f"FATAL: {exc}", file=sys.stderr)
             sys.exit(1)
         stations.append(station)
+
+    # Duplicate station names
+    names = [s.name for s in stations]
+    if len(names) != len(set(names)):
+        dupes = [n for n in set(names) if names.count(n) > 1]
+        print(f"FATAL: Duplicate station names: {', '.join(dupes)}", file=sys.stderr)
+        sys.exit(1)
+
+    # Duplicate Spotify playlist IDs
+    sp_ids = [s.spotify_playlist_id for s in stations if s.spotify_playlist_id]
+    if len(sp_ids) != len(set(sp_ids)):
+        print("FATAL: Duplicate spotify_playlist_id across stations", file=sys.stderr)
+        sys.exit(1)
+
+    # Duplicate YouTube playlist IDs
+    yt_ids = [s.youtube_playlist_id for s in stations if s.youtube_playlist_id]
+    if len(yt_ids) != len(set(yt_ids)):
+        print("FATAL: Duplicate youtube_playlist_id across stations", file=sys.stderr)
+        sys.exit(1)
+
+    # Spotify credentials required if any station uses Spotify
+    if sp_ids and not all([shared.spotify_client_id, shared.spotify_client_secret, shared.spotify_redirect_uri]):
+        print("FATAL: One or more stations use spotify_playlist_id but Spotify credentials are incomplete", file=sys.stderr)
+        sys.exit(1)
+
+    # YouTube credentials required if any station uses YouTube
+    if yt_ids and not all([shared.youtube_client_id, shared.youtube_client_secret]):
+        print("FATAL: One or more stations use youtube_playlist_id but YouTube credentials are incomplete", file=sys.stderr)
+        sys.exit(1)
 
     if not stations:
         print("FATAL: No stations defined in stations.yaml", file=sys.stderr)

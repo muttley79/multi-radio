@@ -46,3 +46,8 @@ stations:
     stream_url: "https://example.com/stream3.m4a"
     youtube_playlist_id: "PLyyyyyyyyyyyyyyyyyyyy"
     analytics: false          # disable analytics for this station
+
+  - name: "station4"          # analytics only — no playlist targets
+    stream_url: "https://example.com/stream4.m4a"
+    analytics: true
+    analytics_retention_days: 30
