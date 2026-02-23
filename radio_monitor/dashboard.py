@@ -275,9 +275,9 @@ function makeHBar(id, labels, data, color) {
 function makeSongHBar(id, songs, color) {
   destroyChart(id);
   if (!songs.length) return;
-  const labels = songs.map(s => s.artist + ' \u2014 ' + s.title).reverse();
-  const counts = songs.map(s => s.count).reverse();
-  const uris   = songs.map(s => s.spotify_uri || null).reverse();
+  const labels = songs.map(s => s.artist + ' \u2014 ' + s.title);
+  const counts = songs.map(s => s.count);
+  const uris   = songs.map(s => s.spotify_uri || null);
   const canvas  = document.getElementById(id);
   const ctx     = canvas.getContext('2d');
 
@@ -362,8 +362,8 @@ function makeLine(id, data) {
 function makeArtistHBar(id, artists, color) {
   destroyChart(id);
   if (!artists.length) return;
-  const labels = artists.map(a => a.artist).reverse();
-  const counts = artists.map(a => a.count).reverse();
+  const labels = artists.map(a => a.artist);
+  const counts = artists.map(a => a.count);
   const ctx = document.getElementById(id).getContext('2d');
   charts[id] = new Chart(ctx, {
     type: 'bar',
@@ -461,6 +461,7 @@ function fmtLocal(utcStr) {
   return new Date(utcStr + 'Z').toLocaleString([], {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
   });
 }
 
