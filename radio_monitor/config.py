@@ -27,6 +27,11 @@ class SharedConfig:
     playlist_mode: str
     log_max_bytes: int
     log_backup_count: int
+    # Analytics / dashboard (all optional — existing configs work unchanged)
+    analytics_db: str = "radio_analytics.db"
+    dashboard_enabled: bool = True
+    dashboard_host: str = "0.0.0.0"
+    dashboard_port: int = 3001
 
 
 @dataclass
@@ -37,6 +42,8 @@ class StationConfig:
     youtube_playlist_id: str | None = None
     skip_ranges: list[SkipRange] = field(default_factory=list)
     log_file: str = ""
+    analytics_enabled: bool = True
+    analytics_retention_days: int = 30
 
     def __post_init__(self):
         if not self.spotify_playlist_id and not self.youtube_playlist_id:
@@ -132,6 +139,10 @@ def load_config(yaml_path: str = "stations.yaml") -> AppConfig:
         playlist_mode=playlist_mode,
         log_max_bytes=int(raw_shared.get("log_max_bytes", 5_242_880)),
         log_backup_count=int(raw_shared.get("log_backup_count", 3)),
+        analytics_db=str(raw_shared.get("analytics_db", "radio_analytics.db")),
+        dashboard_enabled=bool(raw_shared.get("dashboard_enabled", True)),
+        dashboard_host=str(raw_shared.get("dashboard_host", "0.0.0.0")),
+        dashboard_port=int(raw_shared.get("dashboard_port", 3001)),
     )
 
     stations = []
@@ -144,6 +155,8 @@ def load_config(yaml_path: str = "stations.yaml") -> AppConfig:
                 youtube_playlist_id=raw_station.get("youtube_playlist_id"),
                 skip_ranges=_parse_skip_hours(raw_station.get("skip_hours", "")),
                 log_file=raw_station.get("log_file", ""),
+                analytics_enabled=bool(raw_station.get("analytics", raw_station.get("analytics_enabled", True))),
+                analytics_retention_days=int(raw_station.get("analytics_retention_days", 30)),
             )
         except ValueError as exc:
             print(f"FATAL: {exc}", file=sys.stderr)

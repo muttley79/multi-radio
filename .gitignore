@@ -9,3 +9,4 @@ __pycache__/
 *.pyo
 *.log
 .youtube_token_cache.json
+radio_analytics.db

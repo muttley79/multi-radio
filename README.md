@@ -51,12 +51,18 @@ shared:
   log_max_bytes: 5242880   # max log file size in bytes (default: 5 MB)
   log_backup_count: 3      # number of rotated log files to keep (default: 3)
 
+  # Dashboard (optional)
+  dashboard_enabled: true  # set false to disable the web dashboard entirely (default: true)
+  dashboard_port: 3001     # port for the LAN dashboard (default: 3001)
+
 stations:
   - name: "station1"
     stream_url: "https://example.com/stream.m4a"
     spotify_playlist_id: "your_spotify_playlist_id"   # optional
     youtube_playlist_id: "PLxxxxxxxxxxxxxxxxxxxx"      # optional; at least one playlist required
     skip_hours: "mon-fri 07:00-09:30, sat 10:00-14:00"
+    analytics: true                 # record plays to the dashboard database (default: true)
+    analytics_retention_days: 30   # days of history to keep for this station (default: 30)
 ```
 
 ### Spotify credentials
@@ -123,6 +129,19 @@ Controlled by `playlist_mode` in `shared:` (or overridable per station):
 - `reverse` — new tracks are appended at the **bottom**; the oldest track is removed from the top when `playlist_max_size` is exceeded.
 
 `playlist_max_size` defaults to 100. Set to a higher value or remove the key to allow unlimited growth.
+
+## Dashboard
+
+When at least one station has `analytics: true`, a lightweight web dashboard is available at `http://<host>:3001` (port configurable via `dashboard_port`). It shows:
+
+- **Top Songs** — horizontal bar chart with a Spotify icon per row; green icons are clickable and open the track on Spotify.
+- **Top Artists** — horizontal bar chart.
+- **Plays by Hour** and **Plays by Day of Week** — bar charts.
+- **Recent Plays** — live table of the last 50 plays.
+
+A time-range toolbar lets you filter all charts to the last 7 days, 30 days, or all time. The page refreshes automatically every 5 minutes.
+
+Play history is stored in a local SQLite database (`radio_analytics.db` by default). Each station retains its own history independently according to its `analytics_retention_days` setting — old rows for that station are pruned automatically on each new play. If all stations have `analytics: false`, neither the database nor the dashboard server is started.
 
 ## Duplicate handling
 

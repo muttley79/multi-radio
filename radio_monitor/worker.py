@@ -42,7 +42,7 @@ def _build_clients(station: StationConfig, shared: SharedConfig) -> list[tuple[s
     return clients
 
 
-def run_station(station: StationConfig, shared: SharedConfig) -> None:
+def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
     """Per-station monitoring loop. Intended to run in a dedicated thread."""
     logger = logging.getLogger(f"station.{station.name}")
     logger.setLevel(logging.INFO)
@@ -109,6 +109,9 @@ def run_station(station: StationConfig, shared: SharedConfig) -> None:
                         try:
                             spotify.add_song(spotify_uri)
                             logger.info("Added to Spotify playlist: %s - %s", artist, title)
+                            if db and station.analytics_enabled:
+                                db.record_play(station.name, artist, title, spotify_uri=spotify_uri,
+                                               retention_days=station.analytics_retention_days)
                         except Exception:
                             logger.exception("Error adding to Spotify for: %s - %s", artist, title)
 
@@ -145,6 +148,7 @@ def run_station(station: StationConfig, shared: SharedConfig) -> None:
                         time.sleep(120)
                         continue
 
+                    db_recorded = False
                     for name, client in clients:
                         track_id = platform_ids.get(name)
                         if not track_id:
@@ -153,6 +157,11 @@ def run_station(station: StationConfig, shared: SharedConfig) -> None:
                         try:
                             client.add_song(track_id)
                             logger.info("Added to %s playlist: %s - %s", name, artist, title)
+                            if db and station.analytics_enabled and not db_recorded:
+                                sp_uri = track_id if name == "Spotify" else None
+                                db.record_play(station.name, artist, title, spotify_uri=sp_uri,
+                                               retention_days=station.analytics_retention_days)
+                                db_recorded = True
                         except Exception:
                             logger.exception("Error adding to %s for: %s - %s", name, artist, title)
 

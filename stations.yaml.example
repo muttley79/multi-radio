@@ -16,6 +16,8 @@ shared:
   playlist_mode: "normal"   # "normal" = newest on top, "reverse" = newest at bottom
   log_max_bytes: 5242880    # 5 MB per log file
   log_backup_count: 3
+  # dashboard_enabled: true   # set false to disable the web dashboard (default: true)
+  # dashboard_port: 3001      # port for the LAN dashboard
 
 stations:
   - name: "station1"          # both Spotify and YouTube
@@ -30,12 +32,17 @@ stations:
     #   Wrapping day range  →                     "fri-mon 22:00-08:00"
     #   Multiple entries    →                     "mon-fri 07:00-09:30, sat 10:00-14:00"
     skip_hours: "mon-fri 07:00-09:30, sat 10:00-14:00"
+    analytics: true           # record plays to the dashboard database (default: true)
+    analytics_retention_days: 30  # days of history to keep for this station
 
   - name: "station2"          # Spotify only (existing behaviour)
     stream_url: "https://example.com/stream2.m4a"
     spotify_playlist_id: "your_other_spotify_playlist_id"
     skip_hours: "06:00-09:00,16:00-21:00"   # no prefix = every day (backward-compatible)
+    analytics: true
+    analytics_retention_days: 30
 
   - name: "station3"          # YouTube only
     stream_url: "https://example.com/stream3.m4a"
     youtube_playlist_id: "PLyyyyyyyyyyyyyyyyyyyy"
+    analytics: false          # disable analytics for this station
