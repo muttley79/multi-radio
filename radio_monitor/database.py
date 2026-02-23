@@ -132,6 +132,39 @@ class RadioDatabase:
         finally:
             conn.close()
 
+    def plays_by_day(self, station: Optional[str] = None, days: Optional[int] = None, artist: Optional[str] = None) -> list[dict]:
+        where, params = self._where(station, days)
+        if artist:
+            connector = "AND" if where else "WHERE"
+            where += f" {connector} artist = ?"
+            params.append(artist)
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                f"SELECT date(played_at) as day, COUNT(*) as count "
+                f"FROM plays {where} GROUP BY day ORDER BY day",
+                params,
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def songs_by_artist(self, artist: str, station: Optional[str] = None, days: Optional[int] = None, limit: int = 20) -> list[dict]:
+        where, params = self._where(station, days)
+        connector = "AND" if where else "WHERE"
+        where += f" {connector} artist = ?"
+        params.append(artist)
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                f"SELECT title, COUNT(*) as count, MAX(spotify_uri) as spotify_uri "
+                f"FROM plays {where} GROUP BY title ORDER BY count DESC LIMIT ?",
+                params + [limit],
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
+
     def recent_plays(self, station: Optional[str] = None, limit: int = 50) -> list[dict]:
         where, params = self._where(station, None)
         conn = self._connect()

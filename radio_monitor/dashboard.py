@@ -86,6 +86,42 @@ tr:last-child td { border-bottom: none; }
 tr:hover td { background: #fafbfc; }
 .empty { text-align: center; padding: 2rem; color: #bbb; font-size: 0.9rem; }
 #statusBar { padding: 0.3rem 1.5rem 1rem; font-size: 0.75rem; color: #aaa; min-height: 1.4rem; }
+.search-box {
+  border: 1px solid #ddd; border-radius: 4px; padding: 0.2rem 0.5rem;
+  font-size: 0.8rem; width: 180px; outline: none;
+}
+.search-box:focus { border-color: #aaa; }
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4); z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: white; border-radius: 8px; padding: 1.2rem;
+  width: min(520px, 92vw); max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+}
+.modal-hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.8rem;
+}
+.modal-hdr h2 { font-size: 0.95rem; color: #333; }
+.modal-hdr button {
+  background: none; border: none; font-size: 1.3rem;
+  cursor: pointer; color: #aaa; line-height: 1;
+}
+.modal-hdr button:hover { color: #333; }
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.75rem; margin-top: 0.75rem; font-size: 0.8rem; color: #666;
+}
+.pagination button {
+  padding: 0.2rem 0.6rem; border: 1px solid #ccc; background: white;
+  border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+}
+.pagination button:disabled { opacity: 0.4; cursor: default; }
+.pagination button:not(:disabled):hover { background: #f0f2f5; }
 </style>
 </head>
 <body>
@@ -109,7 +145,7 @@ tr:hover td { background: #fafbfc; }
     <div class="chart-wrap chart-wrap-hbar"><canvas id="topArtists"></canvas></div>
   </div>
   <div class="card">
-    <h2>Plays by Hour of Day (UTC)</h2>
+    <h2>Plays by Hour of Day</h2>
     <div class="chart-wrap chart-wrap-bar"><canvas id="hourChart"></canvas></div>
   </div>
   <div class="card">
@@ -120,18 +156,37 @@ tr:hover td { background: #fafbfc; }
 <div class="recent">
   <div class="recent-hdr">
     <h2>Recent Plays</h2>
+    <input id="recentSearch" type="search" placeholder="Search artist or title\u2026" class="search-box">
     <span id="lastUpdate"></span>
   </div>
   <table>
     <thead>
-      <tr><th>Time (UTC)</th><th>Station</th><th>Artist</th><th>Title</th></tr>
+      <tr><th>Time</th><th>Station</th><th>Artist</th><th>Title</th></tr>
     </thead>
     <tbody id="recentBody">
       <tr><td colspan="4" class="empty">Loading&hellip;</td></tr>
     </tbody>
   </table>
+  <div class="pagination">
+    <button id="pagePrev">&lsaquo; Prev</button>
+    <span id="pageInfo"></span>
+    <button id="pageNext">Next &rsaquo;</button>
+  </div>
 </div>
 <div id="statusBar"></div>
+<div id="artistModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <h2 id="modalArtistName"></h2>
+      <button id="modalClose">&times;</button>
+    </div>
+    <div class="chart-wrap" style="height:140px"><canvas id="artistTimeline"></canvas></div>
+    <table>
+      <thead><tr><th>#</th><th>Title</th><th>Plays</th><th></th></tr></thead>
+      <tbody id="artistSongs"></tbody>
+    </table>
+  </div>
+</div>
 <script>
 const STATION  = %%STATION%%;
 const STATIONS = %%STATIONS%%;
@@ -283,6 +338,50 @@ function makeSongHBar(id, songs, color) {
   canvas.addEventListener('mousemove', canvas._spMove);
 }
 
+function makeLine(id, data) {
+  destroyChart(id);
+  if (!data.length) return;
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(d => d.day),
+      datasets: [{ data: data.map(d => d.count),
+        borderColor: '#4a6fa5', backgroundColor: 'rgba(74,111,165,0.1)',
+        fill: true, tension: 0.3, pointRadius: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { maxTicksLimit: 12 } },
+                y: { beginAtZero: true, ticks: { precision: 0 } } },
+    },
+  });
+}
+
+function makeArtistHBar(id, artists, color) {
+  destroyChart(id);
+  if (!artists.length) return;
+  const labels = artists.map(a => a.artist).reverse();
+  const counts = artists.map(a => a.count).reverse();
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data: counts, backgroundColor: color, borderRadius: 3 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { footer: () => 'Click to explore' } } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+      onClick(_, elements) {
+        if (!elements.length) return;
+        openArtistModal(labels[elements[0].index]);
+      },
+    },
+  });
+  document.getElementById(id).style.cursor = 'pointer';
+}
+
 function makeBar(id, labels, data, color) {
   destroyChart(id);
   const ctx = document.getElementById(id).getContext('2d');
@@ -308,9 +407,7 @@ async function loadStats() {
 
     makeSongHBar('topSongs', d.top_songs, '#4a6fa5');
 
-    const artistLabels = d.top_artists.map(a => a.artist).reverse();
-    const artistCounts = d.top_artists.map(a => a.count).reverse();
-    makeHBar('topArtists', artistLabels, artistCounts, '#e07b39');
+    makeArtistHBar('topArtists', d.top_artists, '#e07b39');
 
     makeBar('hourChart',
       d.plays_by_hour.map(h => h.hour + ':00'),
@@ -328,20 +425,86 @@ async function loadStats() {
   }
 }
 
-async function loadRecent() {
-  try {
-    const res  = await fetch(buildUrl('/api/recent', {limit: 50}));
-    if (!res.ok) throw new Error(res.statusText);
-    const rows = await res.json();
-    const tbody = document.getElementById('recentBody');
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">No plays recorded yet.</td></tr>';
-    } else {
-      tbody.innerHTML = rows.map(r => {
-        const t = r.played_at.replace('T', ' ');
+// --- Artist modal ---
+async function openArtistModal(artist) {
+  document.getElementById('modalArtistName').textContent = artist;
+  document.getElementById('artistSongs').innerHTML = '<tr><td colspan="4" class="empty">Loading\u2026</td></tr>';
+  document.getElementById('artistModal').classList.add('open');
+
+  const res  = await fetch(buildUrl('/api/artist', {name: artist}));
+  const data = await res.json();
+
+  makeLine('artistTimeline', data.plays_by_day);
+
+  document.getElementById('artistSongs').innerHTML = data.songs.map((s, i) => {
+    const sp = s.spotify_uri
+      ? '<a href="' + spotifyUrl(s.spotify_uri) + '" target="_blank" style="color:#1DB954">&#9654;</a>'
+      : '';
+    return '<tr><td>' + (i+1) + '</td><td>' + s.title + '</td><td>' + s.count + '</td><td>' + sp + '</td></tr>';
+  }).join('');
+}
+
+document.getElementById('modalClose').onclick = closeModal;
+document.getElementById('artistModal').onclick = e => { if (e.target.id === 'artistModal') closeModal(); };
+function closeModal() {
+  document.getElementById('artistModal').classList.remove('open');
+  destroyChart('artistTimeline');
+}
+
+// --- Recent plays with live search + pagination ---
+let recentRows   = [];
+let filteredRows = [];
+let currentPage  = 0;
+const PAGE_SIZE  = 25;
+
+function fmtLocal(utcStr) {
+  return new Date(utcStr + 'Z').toLocaleString([], {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+
+function renderPage() {
+  const total      = filteredRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  const slice = filteredRows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  const tbody = document.getElementById('recentBody');
+  tbody.innerHTML = !slice.length
+    ? '<tr><td colspan="4" class="empty">No plays recorded yet.</td></tr>'
+    : slice.map(r => {
+        const t = fmtLocal(r.played_at);
         return '<tr><td>' + t + '</td><td>' + r.station + '</td><td>' + r.artist + '</td><td>' + r.title + '</td></tr>';
       }).join('');
-    }
+
+  document.getElementById('pageInfo').textContent =
+    'Page ' + (currentPage + 1) + ' of ' + totalPages + ' (' + total + ' plays)';
+  document.getElementById('pagePrev').disabled = currentPage === 0;
+  document.getElementById('pageNext').disabled = currentPage >= totalPages - 1;
+}
+
+function applyFilter() {
+  const q = document.getElementById('recentSearch').value.toLowerCase();
+  filteredRows = !q ? recentRows : recentRows.filter(r =>
+    r.artist.toLowerCase().includes(q) || r.title.toLowerCase().includes(q)
+  );
+  currentPage = 0;
+  renderPage();
+}
+
+document.getElementById('recentSearch').addEventListener('input', applyFilter);
+document.getElementById('pagePrev').addEventListener('click', () => { currentPage--; renderPage(); });
+document.getElementById('pageNext').addEventListener('click', () => { currentPage++; renderPage(); });
+
+async function loadRecent() {
+  try {
+    const res  = await fetch(buildUrl('/api/recent', {limit: 500}));
+    if (!res.ok) throw new Error(res.statusText);
+    recentRows   = await res.json();
+    filteredRows = recentRows;
+    currentPage  = 0;
+    renderPage();
     document.getElementById('lastUpdate').textContent =
       'updated ' + new Date().toLocaleTimeString();
   } catch (e) {
@@ -349,7 +512,11 @@ async function loadRecent() {
   }
 }
 
-function loadAll() { loadStats(); loadRecent(); }
+function loadAll() {
+  document.getElementById('recentSearch').value = '';
+  loadStats();
+  loadRecent();
+}
 loadAll();
 setInterval(loadAll, 5 * 60 * 1000);
 </script>
@@ -399,6 +566,17 @@ class DashboardServer:
                 "top_artists":  db.top_artists(station=station, days=days),
                 "plays_by_hour": db.plays_by_hour(station=station, days=days),
                 "plays_by_dow": db.plays_by_dow(station=station, days=days),
+            })
+
+        @app.route("/api/artist")
+        def api_artist():
+            name     = request.args.get("name") or ""
+            station  = request.args.get("station") or None
+            days_raw = request.args.get("days", "")
+            days     = int(days_raw) if days_raw.isdigit() else None
+            return jsonify({
+                "songs":        db.songs_by_artist(artist=name, station=station, days=days),
+                "plays_by_day": db.plays_by_day(artist=name, station=station, days=days),
             })
 
         @app.route("/api/recent")
