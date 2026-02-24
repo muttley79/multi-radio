@@ -8,6 +8,16 @@ from radio_monitor.database import RadioDatabase
 
 logger = logging.getLogger(__name__)
 
+_TIME_OF_DAY = {
+    "night":         (0,  5),
+    "early_morning": (6,  8),
+    "morning":       (9, 11),
+    "noon":          (12, 13),
+    "afternoon":     (14, 16),
+    "evening":       (17, 20),
+    "late_night":    (21, 23),
+}
+
 # ---------------------------------------------------------------------------
 # Embedded HTML template.
 # %%STATION%%  is replaced with the JSON-encoded station name (null or "name")
@@ -41,11 +51,12 @@ nav a.active, nav a:hover { background: rgba(255,255,255,0.2); color: white; }
   display: flex; gap: 0.5rem; align-items: center;
 }
 .toolbar label { font-size: 0.85rem; color: #666; margin-right: 0.2rem; }
-button.range {
+button.range, button.tod {
   padding: 0.2rem 0.75rem; border: 1px solid #ccc; background: white;
   border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: all 0.15s;
 }
-button.range.active, button.range:hover {
+button.range.active, button.range:hover,
+button.tod.active, button.tod:hover {
   background: #1a1a2e; color: white; border-color: #1a1a2e;
 }
 .charts {
@@ -135,6 +146,17 @@ tr:hover td { background: #fafbfc; }
   <button class="range" data-days="30">30 days</button>
   <button class="range active" data-days="">All time</button>
 </div>
+<div class="toolbar">
+  <label>Time of day:</label>
+  <button class="tod active" data-tod="">All day</button>
+  <button class="tod" data-tod="night">Night (0\u20136)</button>
+  <button class="tod" data-tod="early_morning">Early Morning (6\u20139)</button>
+  <button class="tod" data-tod="morning">Morning (9\u201312)</button>
+  <button class="tod" data-tod="noon">Noon (12\u201314)</button>
+  <button class="tod" data-tod="afternoon">Afternoon (14\u201317)</button>
+  <button class="tod" data-tod="evening">Evening (17\u201321)</button>
+  <button class="tod" data-tod="late_night">Late Night (21\u201324)</button>
+</div>
 <div class="charts">
   <div class="card">
     <h2>Top Songs</h2>
@@ -213,10 +235,22 @@ document.querySelectorAll('.range').forEach(btn => {
   });
 });
 
+// --- Time of day ---
+let currentTod = null;
+document.querySelectorAll('.tod').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tod').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTod = btn.dataset.tod || null;
+    loadAll();
+  });
+});
+
 function buildUrl(path, extra) {
   const p = new URLSearchParams();
   if (STATION)     p.set('station', STATION);
   if (currentDays) p.set('days',    currentDays);
+  if (currentTod)  p.set('tod',     currentTod);
   if (extra) Object.entries(extra).forEach(([k, v]) => p.set(k, v));
   const qs = p.toString();
   return qs ? path + '?' + qs : path;
@@ -562,11 +596,13 @@ class DashboardServer:
             station  = request.args.get("station") or None
             days_raw = request.args.get("days", "")
             days     = int(days_raw) if days_raw.isdigit() else None
+            tod      = request.args.get("tod") or None
+            hours    = _TIME_OF_DAY.get(tod) if tod else None
             return jsonify({
-                "top_songs":    db.top_songs(station=station, days=days),
-                "top_artists":  db.top_artists(station=station, days=days),
-                "plays_by_hour": db.plays_by_hour(station=station, days=days),
-                "plays_by_dow": db.plays_by_dow(station=station, days=days),
+                "top_songs":     db.top_songs(station=station, days=days, hours=hours),
+                "top_artists":   db.top_artists(station=station, days=days, hours=hours),
+                "plays_by_hour": db.plays_by_hour(station=station, days=days, hours=hours),
+                "plays_by_dow":  db.plays_by_dow(station=station, days=days, hours=hours),
             })
 
         @app.route("/api/artist")
@@ -575,9 +611,11 @@ class DashboardServer:
             station  = request.args.get("station") or None
             days_raw = request.args.get("days", "")
             days     = int(days_raw) if days_raw.isdigit() else None
+            tod      = request.args.get("tod") or None
+            hours    = _TIME_OF_DAY.get(tod) if tod else None
             return jsonify({
-                "songs":        db.songs_by_artist(artist=name, station=station, days=days),
-                "plays_by_day": db.plays_by_day(artist=name, station=station, days=days),
+                "songs":        db.songs_by_artist(artist=name, station=station, days=days, hours=hours),
+                "plays_by_day": db.plays_by_day(artist=name, station=station, days=days, hours=hours),
             })
 
         @app.route("/api/recent")

@@ -61,7 +61,7 @@ class RadioDatabase:
             finally:
                 conn.close()
 
-    def _where(self, station: Optional[str], days: Optional[int]) -> tuple[str, list]:
+    def _where(self, station: Optional[str], days: Optional[int], hours: Optional[tuple[int, int]] = None) -> tuple[str, list]:
         """Build a WHERE clause and params list for the given filters."""
         conditions: list[str] = []
         params: list = []
@@ -71,12 +71,14 @@ class RadioDatabase:
         if days:
             conditions.append("played_at >= datetime('now', ?)")
             params.append(f"-{days} days")
-        if conditions:
-            return "WHERE " + " AND ".join(conditions), params
-        return "", params
+        if hours:
+            start, end = hours
+            conditions.append("CAST(strftime('%H', played_at) AS INTEGER) BETWEEN ? AND ?")
+            params.extend([start, end])
+        return ("WHERE " + " AND ".join(conditions), params) if conditions else ("", params)
 
-    def top_songs(self, station: Optional[str] = None, limit: int = 20, days: Optional[int] = None) -> list[dict]:
-        where, params = self._where(station, days)
+    def top_songs(self, station: Optional[str] = None, limit: int = 20, days: Optional[int] = None, hours: Optional[tuple[int, int]] = None) -> list[dict]:
+        where, params = self._where(station, days, hours)
         conn = self._connect()
         try:
             rows = conn.execute(
@@ -90,8 +92,8 @@ class RadioDatabase:
         finally:
             conn.close()
 
-    def top_artists(self, station: Optional[str] = None, limit: int = 20, days: Optional[int] = None) -> list[dict]:
-        where, params = self._where(station, days)
+    def top_artists(self, station: Optional[str] = None, limit: int = 20, days: Optional[int] = None, hours: Optional[tuple[int, int]] = None) -> list[dict]:
+        where, params = self._where(station, days, hours)
         conn = self._connect()
         try:
             rows = conn.execute(
@@ -105,9 +107,9 @@ class RadioDatabase:
         finally:
             conn.close()
 
-    def plays_by_hour(self, station: Optional[str] = None, days: Optional[int] = None) -> list[dict]:
+    def plays_by_hour(self, station: Optional[str] = None, days: Optional[int] = None, hours: Optional[tuple[int, int]] = None) -> list[dict]:
         """Returns 24 entries (hour 0-23) each with a play count."""
-        where, params = self._where(station, days)
+        where, params = self._where(station, days, hours)
         conn = self._connect()
         try:
             rows = conn.execute(
@@ -120,9 +122,9 @@ class RadioDatabase:
         finally:
             conn.close()
 
-    def plays_by_dow(self, station: Optional[str] = None, days: Optional[int] = None) -> list[dict]:
+    def plays_by_dow(self, station: Optional[str] = None, days: Optional[int] = None, hours: Optional[tuple[int, int]] = None) -> list[dict]:
         """Returns 7 entries (0=Sun … 6=Sat) each with a play count."""
-        where, params = self._where(station, days)
+        where, params = self._where(station, days, hours)
         conn = self._connect()
         try:
             rows = conn.execute(
@@ -136,8 +138,8 @@ class RadioDatabase:
         finally:
             conn.close()
 
-    def plays_by_day(self, station: Optional[str] = None, days: Optional[int] = None, artist: Optional[str] = None) -> list[dict]:
-        where, params = self._where(station, days)
+    def plays_by_day(self, station: Optional[str] = None, days: Optional[int] = None, artist: Optional[str] = None, hours: Optional[tuple[int, int]] = None) -> list[dict]:
+        where, params = self._where(station, days, hours)
         if artist:
             connector = "AND" if where else "WHERE"
             where += f" {connector} artist = ?"
@@ -153,8 +155,8 @@ class RadioDatabase:
         finally:
             conn.close()
 
-    def songs_by_artist(self, artist: str, station: Optional[str] = None, days: Optional[int] = None, limit: int = 20) -> list[dict]:
-        where, params = self._where(station, days)
+    def songs_by_artist(self, artist: str, station: Optional[str] = None, days: Optional[int] = None, limit: int = 20, hours: Optional[tuple[int, int]] = None) -> list[dict]:
+        where, params = self._where(station, days, hours)
         connector = "AND" if where else "WHERE"
         where += f" {connector} artist = ?"
         params.append(artist)
