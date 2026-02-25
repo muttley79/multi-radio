@@ -240,15 +240,13 @@ const nav = document.getElementById('stationNav');
   a.textContent = item.label;
   const isActive = (item.name === null && STATION === null) || item.name === STATION;
   if (isActive) a.className = 'active';
-  nav.appendChild(a);
   if (isActive && item.name && STATION_PLAYLISTS[item.name]) {
-    const pl = document.createElement('a');
-    pl.href = 'https://open.spotify.com/playlist/' + STATION_PLAYLISTS[item.name];
-    pl.target = '_blank';
-    pl.title = 'Open station playlist on Spotify';
-    pl.innerHTML = '<img src="' + _SP_SRC + '" width="16" height="16" style="vertical-align:middle">';
-    nav.appendChild(pl);
+    a.href = 'https://open.spotify.com/playlist/' + STATION_PLAYLISTS[item.name];
+    a.target = '_blank';
+    a.title = 'Open station playlist on Spotify';
+    a.innerHTML += '\u00a0<img src="' + _SP_SRC + '" width="14" height="14" style="vertical-align:middle;opacity:0.9">';
   }
+  nav.appendChild(a);
 });
 
 // --- Time range ---
