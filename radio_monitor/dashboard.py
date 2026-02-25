@@ -48,12 +48,14 @@ nav a {
 nav a.active, nav a:hover { background: rgba(255,255,255,0.2); color: white; }
 .toolbar {
   padding: 0.5rem 1.5rem; background: white; border-bottom: 1px solid #ddd;
-  display: flex; gap: 0.5rem; align-items: center;
+  display: flex; gap: 0.5rem; align-items: center; overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
-.toolbar label { font-size: 0.85rem; color: #666; margin-right: 0.2rem; }
+.toolbar label { font-size: 0.85rem; color: #666; margin-right: 0.2rem; flex-shrink: 0; }
 button.range, button.tod {
   padding: 0.2rem 0.75rem; border: 1px solid #ccc; background: white;
   border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: all 0.15s;
+  white-space: nowrap; flex-shrink: 0;
 }
 button.range.active, button.range:hover,
 button.tod.active, button.tod:hover {
@@ -210,9 +212,25 @@ tr:hover td { background: #fafbfc; }
   </div>
 </div>
 <script>
-const STATION  = %%STATION%%;
-const STATIONS = %%STATIONS%%;
-const charts   = {};
+const STATION           = %%STATION%%;
+const STATIONS          = %%STATIONS%%;
+const STATION_PLAYLISTS = %%STATION_PLAYLISTS%%;
+const charts            = {};
+
+// --- Spotify helpers ---
+function spotifyUrl(uri) {
+  return 'https://open.spotify.com/track/' + uri.replace('spotify:track:', '');
+}
+const _SP_SVG = '<svg viewBox="0 0 168 168" xmlns="http://www.w3.org/2000/svg">'
+  + '<circle cx="84" cy="84" r="84" fill="#1DB954"/>'
+  + '<path fill="white" d="M120.6 115.5c-1.5 2.5-4.8 3.3-7.3 1.8-19.9-12.2-45.1-15'
+  + '-74.7-8.2-2.9.7-5.8-1.1-6.4-4-.7-2.9 1.1-5.8 4-6.4 32.4-7.4 60.2-4.2 82.7 9.5'
+  + ' 2.5 1.5 3.3 4.8 1.8 7.3zm9.8-21.9c-1.9 3.1-6 4.1-9.1 2.2-22.8-14-57.5-18.1'
+  + '-84.5-9.9-3.5 1.1-7.2-.9-8.3-4.4-1.1-3.5.9-7.2 4.4-8.3 30.8-9.3 69.1-4.8 95.3'
+  + ' 11.3 3.1 1.9 4.1 6 2.2 9.1zm.8-22.8C103.7 53.2 62 51.7 38.7 59.1c-4.2 1.3'
+  + '-8.6-1-9.9-5.2-1.3-4.2 1-8.6 5.2-9.9 26.9-8.2 71.6-6.6 99.8 11 3.8 2.3 5 7.2'
+  + ' 2.7 11-.2.3-.4.6-.6.8-2.3 3.6-7.2 4.7-10.7 2.4z"/></svg>';
+const _SP_SRC = 'data:image/svg+xml;base64,' + btoa(_SP_SVG);
 
 // --- Nav ---
 const nav = document.getElementById('stationNav');
@@ -220,8 +238,17 @@ const nav = document.getElementById('stationNav');
   const a = document.createElement('a');
   a.href = item.name ? '/' + item.name : '/';
   a.textContent = item.label;
-  if ((item.name === null && STATION === null) || item.name === STATION) a.className = 'active';
+  const isActive = (item.name === null && STATION === null) || item.name === STATION;
+  if (isActive) a.className = 'active';
   nav.appendChild(a);
+  if (isActive && item.name && STATION_PLAYLISTS[item.name]) {
+    const pl = document.createElement('a');
+    pl.href = 'https://open.spotify.com/playlist/' + STATION_PLAYLISTS[item.name];
+    pl.target = '_blank';
+    pl.title = 'Open station playlist on Spotify';
+    pl.innerHTML = '<img src="' + _SP_SRC + '" width="16" height="16" style="vertical-align:middle">';
+    nav.appendChild(pl);
+  }
 });
 
 // --- Time range ---
@@ -256,34 +283,14 @@ function buildUrl(path, extra) {
   return qs ? path + '?' + qs : path;
 }
 
-// --- Spotify helpers ---
-function spotifyUrl(uri) {
-  return 'https://open.spotify.com/track/' + uri.replace('spotify:track:', '');
-}
-
-function makeSvgImg(fill) {
-  const svg = '<svg viewBox="0 0 168 168" xmlns="http://www.w3.org/2000/svg">'
-    + '<circle cx="84" cy="84" r="84" fill="' + fill + '"/>'
-    + '<path fill="white" d="M120.6 115.5c-1.5 2.5-4.8 3.3-7.3 1.8-19.9-12.2-45.1-15'
-    + '-74.7-8.2-2.9.7-5.8-1.1-6.4-4-.7-2.9 1.1-5.8 4-6.4 32.4-7.4 60.2-4.2 82.7 9.5'
-    + ' 2.5 1.5 3.3 4.8 1.8 7.3zm9.8-21.9c-1.9 3.1-6 4.1-9.1 2.2-22.8-14-57.5-18.1'
-    + '-84.5-9.9-3.5 1.1-7.2-.9-8.3-4.4-1.1-3.5.9-7.2 4.4-8.3 30.8-9.3 69.1-4.8 95.3'
-    + ' 11.3 3.1 1.9 4.1 6 2.2 9.1zm.8-22.8C103.7 53.2 62 51.7 38.7 59.1c-4.2 1.3'
-    + '-8.6-1-9.9-5.2-1.3-4.2 1-8.6 5.2-9.9 26.9-8.2 71.6-6.6 99.8 11 3.8 2.3 5 7.2'
-    + ' 2.7 11-.2.3-.4.6-.6.8-2.3 3.6-7.2 4.7-10.7 2.4z"/></svg>';
-  const img = new Image(14, 14);
-  img.src = 'data:image/svg+xml;base64,' + btoa(svg);
-  return img;
-}
-const SP_GREEN = makeSvgImg('#1DB954');
-const SP_GRAY  = makeSvgImg('#bbbbbb');
 
 // --- Charts ---
 function destroyChart(id) {
   if (charts[id]) {
     const canvas = charts[id].canvas;
-    if (canvas._spClick) canvas.removeEventListener('click', canvas._spClick);
     if (canvas._spMove) canvas.removeEventListener('mousemove', canvas._spMove);
+    const iconCol = canvas.parentElement && canvas.parentElement.querySelector('.sp-icon-col');
+    if (iconCol) iconCol.remove();
     charts[id].destroy();
     delete charts[id];
   }
@@ -313,63 +320,43 @@ function makeSongHBar(id, songs, color) {
   const counts = songs.map(s => s.count);
   const uris   = songs.map(s => s.spotify_uri || null);
   const canvas  = document.getElementById(id);
-  const ctx     = canvas.getContext('2d');
+
+  // HTML icon column: absolutely positioned in the canvas right-padding area
+  const wrap = canvas.parentElement;
+  const iconCol = document.createElement('div');
+  iconCol.className = 'sp-icon-col';
+  iconCol.style.cssText = 'position:absolute;right:0;top:0;height:100%;width:22px;pointer-events:none';
+  wrap.appendChild(iconCol);
 
   const spPlugin = {
     id: 'spIcons',
-    afterDraw(chart) {
-      const ctx2 = chart.ctx;
-      chart.data.datasets[0].data.forEach((count, i) => {
-        const meta = chart.getDatasetMeta(0);
-        const bar  = meta.data[i];
-        const x    = chart.scales.x.getPixelForValue(count) + 4;
-        const y    = bar.y - 7;
-        ctx2.drawImage(uris[i] ? SP_GREEN : SP_GRAY, x, y, 14, 14);
+    afterRender(chart) {
+      iconCol.innerHTML = '';
+      chart.data.datasets[0].data.forEach((_, i) => {
+        if (!uris[i]) return;
+        const bar = chart.getDatasetMeta(0).data[i];
+        const a   = document.createElement('a');
+        a.href    = spotifyUrl(uris[i]);
+        a.target  = '_blank';
+        a.title   = 'Open on Spotify';
+        a.style.cssText = 'position:absolute;left:4px;top:' + (bar.y - 7) + 'px;line-height:0;display:block;pointer-events:auto';
+        a.innerHTML = '<img src="' + _SP_SRC + '" width="14" height="14">';
+        iconCol.appendChild(a);
       });
     }
   };
 
-  charts[id] = new Chart(ctx, {
+  charts[id] = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: { labels, datasets: [{ data: counts, backgroundColor: color, borderRadius: 3 }] },
     options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       layout: { padding: { right: 22 } },
       plugins: { legend: { display: false } },
       scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
     },
     plugins: [spPlugin],
   });
-
-  // Icon hit-test helper: returns uri if click/move is over a green icon, else null
-  function iconUri(e) {
-    if (!charts[id]) return null;
-    const chart = charts[id];
-    const rect  = canvas.getBoundingClientRect();
-    const cx    = e.clientX - rect.left;
-    const cy    = e.clientY - rect.top;
-    const meta  = chart.getDatasetMeta(0);
-    for (let i = 0; i < counts.length; i++) {
-      if (!uris[i]) continue;
-      const bar = meta.data[i];
-      const ix  = chart.scales.x.getPixelForValue(counts[i]) + 4;
-      const iy  = bar.y - 7;
-      if (cx >= ix && cx <= ix + 14 && cy >= iy && cy <= iy + 14) return uris[i];
-    }
-    return null;
-  }
-
-  canvas._spClick = function(e) {
-    const uri = iconUri(e);
-    if (uri) window.open(spotifyUrl(uri), '_blank');
-  };
-  canvas._spMove = function(e) {
-    canvas.style.cursor = iconUri(e) ? 'pointer' : 'default';
-  };
-  canvas.addEventListener('click', canvas._spClick);
-  canvas.addEventListener('mousemove', canvas._spMove);
 }
 
 function makeLine(id, data) {
@@ -561,18 +548,20 @@ setInterval(loadAll, 5 * 60 * 1000);
 
 
 class DashboardServer:
-    def __init__(self, db: RadioDatabase, host: str, port: int, station_names: list[str]):
+    def __init__(self, db: RadioDatabase, host: str, port: int, station_names: list[str], station_playlists: dict | None = None):
         self._db = db
         self._host = host
         self._port = port
         self._station_names = station_names
+        self._station_playlists = station_playlists or {}
         self._app = self._build_app()
 
     def _render(self, station) -> str:
         return (
             _HTML_TEMPLATE
-            .replace("%%STATION%%",  json.dumps(station))
-            .replace("%%STATIONS%%", json.dumps(self._station_names))
+            .replace("%%STATION%%",           json.dumps(station))
+            .replace("%%STATIONS%%",          json.dumps(self._station_names))
+            .replace("%%STATION_PLAYLISTS%%", json.dumps(self._station_playlists))
         )
 
     def _build_app(self) -> Flask:

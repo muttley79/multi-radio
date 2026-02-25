@@ -48,7 +48,8 @@ def main() -> None:
         try:
             from radio_monitor.dashboard import DashboardServer
             station_names = [s.name for s in app_config.stations]
-            DashboardServer(db, shared.dashboard_host, shared.dashboard_port, station_names).start()
+            station_playlists = {s.name: s.spotify_playlist_id for s in app_config.stations if s.spotify_playlist_id}
+            DashboardServer(db, shared.dashboard_host, shared.dashboard_port, station_names, station_playlists).start()
         except ImportError:
             logger.warning("Flask not installed — dashboard disabled. Run: pip install flask")
 
