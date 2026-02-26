@@ -1,4 +1,4 @@
-spotipy>=2.23.0
+spotipy>=2.25.2
 requests>=2.31.0
 shazamio>=0.8.0
 pyyaml>=6.0

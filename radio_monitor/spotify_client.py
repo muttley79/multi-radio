@@ -35,11 +35,31 @@ class SpotifyPlaylistManager:
         me = self.sp.current_user()
         logger.info("Authenticated as Spotify user: %s", me.get("display_name") or me["id"])
 
+        if me.get("product") != "premium":
+            raise RuntimeError(
+                "Spotify Premium is required for playlist API access (Feb 2026 restriction). "
+                f"Account '{me.get('id')}' has product='{me.get('product')}'."
+            )
+
+        playlist_meta = self.sp.playlist(self.playlist_id, fields="id,name,owner.id")
+        owner_id = playlist_meta.get("owner", {}).get("id")
+        if owner_id != me["id"]:
+            logger.warning(
+                "Playlist '%s' (%s) is owned by '%s', not the authenticated user '%s'. "
+                "Playlist item contents may be restricted (Feb 2026 Spotify API change).",
+                playlist_meta.get("name", self.playlist_id),
+                self.playlist_id,
+                owner_id,
+                me["id"],
+            )
+
     def _get_playlist_track_uris(self) -> list[str]:
         """Fetch all track URIs currently in the playlist (needed for trim calculations)."""
         uris = []
-        results = self.sp.playlist_items(
-            self.playlist_id, fields="items.track.uri,next", additional_types=["track"]
+        results = self.sp._get(
+            f"playlists/{self.playlist_id}/items",
+            fields="items.track.uri,next",
+            limit=100,
         )
         while True:
             for item in results["items"]:
@@ -117,8 +137,10 @@ class SpotifyPlaylistManager:
 
     def get_last_track_uri(self) -> str | None:
         """Get the URI of the most recently added track in the playlist."""
-        results = self.sp.playlist_items(
-            self.playlist_id, fields="items.track.uri", additional_types=["track"], limit=1
+        results = self.sp._get(
+            f"playlists/{self.playlist_id}/items",
+            fields="items.track.uri",
+            limit=1,
         )
         items = results.get("items", [])
         if not items:
@@ -138,7 +160,10 @@ class SpotifyPlaylistManager:
 
         if self.mode == "normal":
             # Newest on top: add at position 0, trim the last item(s) if over max
-            self.sp.playlist_add_items(self.playlist_id, [track_uri], position=0)
+            self.sp._post(
+                f"playlists/{self.playlist_id}/items",
+                payload={"uris": [track_uri], "position": 0},
+            )
             logger.info("Added to top of playlist: %s", track_uri)
             if len(current_uris) + 1 > self.max_size:
                 excess_count = len(current_uris) + 1 - self.max_size
@@ -147,11 +172,17 @@ class SpotifyPlaylistManager:
                     {"uri": current_uris[self.max_size - 1 + i], "positions": [self.max_size + i]}
                     for i in range(excess_count)
                 ]
-                self.sp.playlist_remove_specific_occurrences_of_items(self.playlist_id, items_to_remove)
+                self.sp._delete(
+                    f"playlists/{self.playlist_id}/items",
+                    payload={"items": items_to_remove},
+                )
                 logger.info("Trimmed %d old track(s) from bottom", excess_count)
         else:
             # Reverse: newest at bottom, trim the first item(s) if over max
-            self.sp.playlist_add_items(self.playlist_id, [track_uri])
+            self.sp._post(
+                f"playlists/{self.playlist_id}/items",
+                payload={"uris": [track_uri]},
+            )
             logger.info("Added to bottom of playlist: %s", track_uri)
             if len(current_uris) + 1 > self.max_size:
                 excess_count = len(current_uris) + 1 - self.max_size
@@ -160,5 +191,8 @@ class SpotifyPlaylistManager:
                     {"uri": current_uris[i], "positions": [i]}
                     for i in range(excess_count)
                 ]
-                self.sp.playlist_remove_specific_occurrences_of_items(self.playlist_id, items_to_remove)
+                self.sp._delete(
+                    f"playlists/{self.playlist_id}/items",
+                    payload={"items": items_to_remove},
+                )
                 logger.info("Trimmed %d old track(s) from top", excess_count)
