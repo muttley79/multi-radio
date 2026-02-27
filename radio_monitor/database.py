@@ -176,7 +176,7 @@ class RadioDatabase:
         conn = self._connect()
         try:
             rows = conn.execute(
-                f"SELECT station, artist, title, played_at FROM plays {where} "
+                f"SELECT station, artist, title, played_at, spotify_uri FROM plays {where} "
                 f"ORDER BY played_at DESC LIMIT ?",
                 params + [limit],
             ).fetchall()

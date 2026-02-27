@@ -185,10 +185,10 @@ tr:hover td { background: #fafbfc; }
   </div>
   <table>
     <thead>
-      <tr><th>Time</th><th>Station</th><th>Artist</th><th>Title</th></tr>
+      <tr><th>Time</th><th>Station</th><th>Artist</th><th>Title</th><th></th></tr>
     </thead>
     <tbody id="recentBody">
-      <tr><td colspan="4" class="empty">Loading&hellip;</td></tr>
+      <tr><td colspan="5" class="empty">Loading&hellip;</td></tr>
     </tbody>
   </table>
   <div class="pagination">
@@ -492,10 +492,13 @@ function renderPage() {
 
   const tbody = document.getElementById('recentBody');
   tbody.innerHTML = !slice.length
-    ? '<tr><td colspan="4" class="empty">No plays recorded yet.</td></tr>'
+    ? '<tr><td colspan="5" class="empty">No plays recorded yet.</td></tr>'
     : slice.map(r => {
-        const t = fmtLocal(r.played_at);
-        return '<tr><td>' + t + '</td><td>' + r.station + '</td><td>' + r.artist + '</td><td>' + r.title + '</td></tr>';
+        const t  = fmtLocal(r.played_at);
+        const sp = r.spotify_uri
+          ? '<a href="' + spotifyUrl(r.spotify_uri) + '" target="_blank" title="Open on Spotify" style="line-height:0;display:inline-block"><img src="' + _SP_SRC + '" width="16" height="16"></a>'
+          : '';
+        return '<tr><td>' + t + '</td><td>' + r.station + '</td><td>' + r.artist + '</td><td>' + r.title + '</td><td style="width:26px;text-align:center">' + sp + '</td></tr>';
       }).join('');
 
   document.getElementById('pageInfo').textContent =

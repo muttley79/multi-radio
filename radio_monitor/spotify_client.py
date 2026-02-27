@@ -35,12 +35,6 @@ class SpotifyPlaylistManager:
         me = self.sp.current_user()
         logger.info("Authenticated as Spotify user: %s", me.get("display_name") or me["id"])
 
-        if me.get("product") != "premium":
-            raise RuntimeError(
-                "Spotify Premium is required for playlist API access (Feb 2026 restriction). "
-                f"Account '{me.get('id')}' has product='{me.get('product')}'."
-            )
-
         playlist_meta = self.sp.playlist(self.playlist_id, fields="id,name,owner.id")
         owner_id = playlist_meta.get("owner", {}).get("id")
         if owner_id != me["id"]:
@@ -58,12 +52,12 @@ class SpotifyPlaylistManager:
         uris = []
         results = self.sp._get(
             f"playlists/{self.playlist_id}/items",
-            fields="items.track.uri,next",
+            fields="items.item.uri,next",
             limit=100,
         )
         while True:
             for item in results["items"]:
-                track = item.get("track")
+                track = item.get("item")
                 if track and track.get("uri"):
                     uris.append(track["uri"])
             if results.get("next"):
@@ -72,8 +66,8 @@ class SpotifyPlaylistManager:
                 break
         return uris
 
-    def search_track(self, artist: str, title: str) -> str | None:
-        """Search Spotify for a track by artist and title. Returns URI or None.
+    def search_track(self, artist: str, title: str) -> dict | None:
+        """Search Spotify for a track by artist and title. Returns {"uri": ..., "duration_ms": ...} or None.
 
         Tries multiple queries in order of strictness, with targeted fallbacks for
         Hebrew titles, multi-artist entries, and transliteration mismatches.
@@ -130,7 +124,7 @@ class SpotifyPlaylistManager:
             if items:
                 uri = items[0]["uri"]
                 logger.info("Spotify match [query=%d]: %s - %s → %s", i + 1, artist, title, uri)
-                return uri
+                return {"uri": uri, "duration_ms": items[0].get("duration_ms") or 0}
 
         logger.warning("Spotify search found nothing for: %s - %s", artist, title)
         return None
@@ -139,13 +133,13 @@ class SpotifyPlaylistManager:
         """Get the URI of the most recently added track in the playlist."""
         results = self.sp._get(
             f"playlists/{self.playlist_id}/items",
-            fields="items.track.uri",
+            fields="items.item.uri",
             limit=1,
         )
         items = results.get("items", [])
         if not items:
             return None
-        track = items[0].get("track")
+        track = items[0].get("item")
         if track:
             return track.get("uri")
         return None

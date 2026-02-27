@@ -64,6 +64,7 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
     _last_song: tuple[str, str] | None = None  # dedup for analytics-only stations
 
     in_skip = False
+    next_sleep = shared.poll_interval
     while True:
         try:
             if is_skip_hour(station.skip_ranges):
@@ -76,6 +77,8 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
             if in_skip:
                 logger.info("Ended skip hours — resuming")
                 in_skip = False
+
+            next_sleep = shared.poll_interval
 
             audio_file = record_sample(station.stream_url, shared.sample_duration)
             if not audio_file:
@@ -114,7 +117,11 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
                     youtube = client_map["YouTube"]
 
                     # --- Spotify ---
-                    spotify_uri = spotify.search_track(artist, title)
+                    spotify_result = spotify.search_track(artist, title)
+                    spotify_uri = spotify_result["uri"] if spotify_result else None
+                    if spotify_result and spotify_result.get("duration_ms"):
+                        next_sleep = min(shared.poll_interval, max(60, int(spotify_result["duration_ms"] / 1000 * 0.8)))
+                        logger.info("Smart sleep: %ds (song ~%ds)", next_sleep, spotify_result["duration_ms"] // 1000)
                     if not spotify_uri:
                         logger.warning("Song not found on Spotify: %s - %s", artist, title)
                     elif spotify_uri == spotify.get_last_track_uri():
@@ -151,7 +158,14 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
                     # Single-platform flow
                     platform_ids: dict[str, str | None] = {}
                     for name, client in clients:
-                        platform_ids[name] = client.search_track(artist, title)
+                        result = client.search_track(artist, title)
+                        if name == "Spotify" and isinstance(result, dict):
+                            platform_ids[name] = result["uri"]
+                            if result.get("duration_ms"):
+                                next_sleep = min(shared.poll_interval, max(60, int(result["duration_ms"] / 1000 * 0.8)))
+                                logger.info("Smart sleep: %ds (song ~%ds)", next_sleep, result["duration_ms"] // 1000)
+                        else:
+                            platform_ids[name] = result  # YouTube returns str | None unchanged
 
                     all_same = True
                     for name, client in clients:
@@ -190,4 +204,4 @@ def run_station(station: StationConfig, shared: SharedConfig, db=None) -> None:
         except Exception:
             logger.exception("Unexpected error in station loop")
 
-        time.sleep(shared.poll_interval)
+        time.sleep(next_sleep)
